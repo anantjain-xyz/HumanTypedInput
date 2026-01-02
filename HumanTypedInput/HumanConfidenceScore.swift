@@ -56,15 +56,26 @@ public struct HumanConfidenceScore {
         // Factor 5: No suspiciously instant bursts
         let burstScore = Self.scoreBurstPatterns(metrics: metrics)
         factors.append(burstScore)
-        
+
+        // Factor 6: Explicit paste detection
+        let pasteScore = Self.scorePasteDetection(metrics: metrics)
+        factors.append(pasteScore)
+
         self.factors = factors
-        
-        // Weighted average - volume is gating, others are signals
+
+        // Weighted average - volume is gating, paste detection is critical
         if volumeScore.score < 30 {
             // Not enough data to judge
             self.score = min(volumeScore.score, 25)
+        } else if pasteScore.score == 0 {
+            // Paste detected - cap the score severely
+            let weights = [0.1, 0.2, 0.15, 0.15, 0.2, 0.2]  // Must sum to 1.0
+            let weightedSum = zip(factors, weights).reduce(0.0) { sum, pair in
+                sum + Double(pair.0.score) * pair.1
+            }
+            self.score = min(Int(weightedSum.rounded()), 20)
         } else {
-            let weights = [0.1, 0.25, 0.2, 0.2, 0.25]  // Must sum to 1.0
+            let weights = [0.1, 0.2, 0.15, 0.15, 0.2, 0.2]  // Must sum to 1.0
             let weightedSum = zip(factors, weights).reduce(0.0) { sum, pair in
                 sum + Double(pair.0.score) * pair.1
             }
@@ -239,5 +250,29 @@ public struct HumanConfidenceScore {
         }
         
         return ScoringFactor(name: "Burst Detection", score: score, explanation: explanation)
+    }
+
+    private static func scorePasteDetection(metrics: TypingMetrics) -> ScoringFactor {
+        let pasteCount = metrics.pasteCount
+        let pastedChars = metrics.pastedCharacterCount
+
+        let score: Int
+        let explanation: String
+
+        if pasteCount == 0 {
+            score = 100
+            explanation = "No paste operations detected"
+        } else if pasteCount == 1 && pastedChars < 10 {
+            score = 60
+            explanation = "Minor paste detected (\(pastedChars) chars)"
+        } else if pasteCount == 1 {
+            score = 20
+            explanation = "Paste detected (\(pastedChars) chars)"
+        } else {
+            score = 0
+            explanation = "Multiple pastes detected (\(pasteCount) times, \(pastedChars) total chars)"
+        }
+
+        return ScoringFactor(name: "Paste Detection", score: score, explanation: explanation)
     }
 }
