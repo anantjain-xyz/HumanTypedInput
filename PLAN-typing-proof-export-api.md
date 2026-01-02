@@ -12,16 +12,46 @@ This document outlines the API contract for exporting typing proof data from the
 
 ```swift
 /// Exports the current typing session as a verifiable proof
-/// - Parameter includeRawEvents: Whether to include raw keystroke events (default: true)
-/// - Parameter includeTextContent: Whether to include the actual typed text (default: false for privacy)
+/// - Parameter options: Configuration options for the export
 /// - Returns: A TypingProof object that can be serialized to JSON
 func exportTypingProof(
-    includeRawEvents: Bool = true,
-    includeTextContent: Bool = false
+    options: TypingProofExportOptions = .standard
 ) -> TypingProof
 ```
 
-### 2. New `TypingProof` Model (Codable)
+### 2. Export Options
+
+```swift
+public struct TypingProofExportOptions: Sendable {
+    /// Include raw keystroke events in the export
+    public var includeRawEvents: Bool = true
+
+    /// Include content verification (length + hash)
+    public var includeContentVerification: Bool = false
+
+    /// Redact characters in keystroke events (replace with "*")
+    /// Preserves timing data while hiding actual content
+    public var redactCharacters: Bool = false
+
+    /// Preset configurations
+    public static let standard = TypingProofExportOptions()
+    public static let minimal = TypingProofExportOptions(
+        includeRawEvents: false,
+        includeContentVerification: false
+    )
+    public static let redacted = TypingProofExportOptions(
+        includeRawEvents: true,
+        redactCharacters: true
+    )
+    public static let full = TypingProofExportOptions(
+        includeRawEvents: true,
+        includeContentVerification: true,
+        redactCharacters: false
+    )
+}
+```
+
+### 3. New `TypingProof` Model (Codable)
 
 ```swift
 public struct TypingProof: Codable, Sendable {
@@ -48,6 +78,8 @@ public struct TypingProof: Codable, Sendable {
 ---
 
 ## JSON Export Structure
+
+### Standard Export (`.standard`)
 
 ```json
 {
@@ -123,6 +155,100 @@ public struct TypingProof: Codable, Sendable {
       "character": "l",
       "intervalMs": 155
     }
+  ],
+  "content": null
+}
+```
+
+### Minimal Export (`.minimal`)
+
+Lightweight payload with just score and metrics—no raw events or content verification.
+
+```json
+{
+  "version": "1.0",
+  "metadata": {
+    "exportedAt": "2026-01-02T14:30:00.000Z",
+    "sessionStartedAt": "2026-01-02T14:25:12.345Z",
+    "sessionDurationMs": 287655,
+    "sdkVersion": "1.0.0",
+    "platform": "iOS",
+    "platformVersion": "17.0"
+  },
+  "metrics": {
+    "totalKeystrokes": 156,
+    "deletionCount": 12,
+    "correctionRate": 0.077,
+    "averageIntervalMs": 185.4,
+    "timingVarianceMs": 72.3,
+    "estimatedWPM": 54
+  },
+  "confidence": {
+    "score": 87,
+    "interpretation": "High confidence: likely human typed",
+    "factors": [...]
+  },
+  "events": null,
+  "content": null
+}
+```
+
+### Redacted Export (`.redacted`)
+
+Full timing data with characters replaced by `"*"` for privacy.
+
+```json
+{
+  "version": "1.0",
+  "metadata": {...},
+  "metrics": {...},
+  "confidence": {...},
+  "events": [
+    {
+      "index": 0,
+      "timestampMs": 0,
+      "character": "*",
+      "intervalMs": null
+    },
+    {
+      "index": 1,
+      "timestampMs": 187,
+      "character": "*",
+      "intervalMs": 187
+    },
+    {
+      "index": 2,
+      "timestampMs": 342,
+      "character": "*",
+      "intervalMs": 155
+    },
+    {
+      "index": 3,
+      "timestampMs": 520,
+      "character": "[DELETE]",
+      "intervalMs": 178
+    }
+  ],
+  "content": null
+}
+```
+
+Note: `[DELETE]` is preserved (not redacted) since it doesn't reveal content.
+
+### Full Export (`.full`)
+
+Everything included: raw events with actual characters + content verification.
+
+```json
+{
+  "version": "1.0",
+  "metadata": {...},
+  "metrics": {...},
+  "confidence": {...},
+  "events": [
+    {"index": 0, "timestampMs": 0, "character": "H", "intervalMs": null},
+    {"index": 1, "timestampMs": 187, "character": "e", "intervalMs": 187},
+    ...
   ],
   "content": {
     "length": 142,
@@ -260,10 +386,32 @@ extension TypingProof {
 extension HumanTypedTextView {
     /// Exports typing proof directly as JSON Data
     func exportTypingProofAsJSON(
-        includeRawEvents: Bool = true,
-        includeTextContent: Bool = false
+        options: TypingProofExportOptions = .standard
     ) throws -> Data
 }
+```
+
+### Usage Examples
+```swift
+// Standard export with raw events
+let proof = textView.exportTypingProof()
+let json = try proof.toJSONData()
+
+// Minimal export for bandwidth-constrained scenarios
+let minimalProof = textView.exportTypingProof(options: .minimal)
+
+// Redacted export for maximum privacy
+let redactedProof = textView.exportTypingProof(options: .redacted)
+
+// Full export with content verification
+let fullProof = textView.exportTypingProof(options: .full)
+
+// Custom options
+var customOptions = TypingProofExportOptions()
+customOptions.includeRawEvents = true
+customOptions.redactCharacters = true
+customOptions.includeContentVerification = true
+let customProof = textView.exportTypingProof(options: customOptions)
 ```
 
 ---
@@ -309,6 +457,7 @@ extension HumanTypedTextView {
 ## Implementation Steps
 
 1. **Create `TypingProof.swift`** - New file with all export models
+   - `TypingProofExportOptions` (with `.standard`, `.minimal`, `.redacted`, `.full` presets)
    - `TypingProof`
    - `ProofMetadata`
    - `ExportedMetrics`
@@ -317,17 +466,19 @@ extension HumanTypedTextView {
    - `ExportedKeystrokeEvent`
    - `ContentVerification`
 
-2. **Add Codable conformance** - All structs implement `Codable`
+2. **Add Codable conformance** - All structs implement `Codable` and `Sendable`
 
 3. **Add JSON export convenience methods** - `toJSONData()`, `toJSONString()`
 
-4. **Extend `HumanTypedTextView`** - Add `exportTypingProof()` method
+4. **Extend `HumanTypedTextView`** - Add `exportTypingProof(options:)` method
 
 5. **Add helper for WPM calculation** - Extract from `HumanConfidenceScore`
 
-6. **Update demo app** - Show export functionality in action
+6. **Implement character redaction logic** - Replace characters with `"*"` when `redactCharacters: true`
 
-7. **Add DocC documentation** - Document the new API
+7. **Update demo app** - Show export functionality in action
+
+8. **Add DocC documentation** - Document the new API
 
 ---
 
@@ -341,14 +492,10 @@ extension HumanTypedTextView {
 
 ---
 
-## Questions for Review
+## Resolved Design Questions
 
-1. **Character Redaction**: Should we offer an option to redact characters (replace with `"*"`) while preserving timing data?
-
-2. **Factor Weights in Export**: Should we expose the weight values, or just the raw/weighted scores?
-
-3. **Timestamp Precision**: Is millisecond precision sufficient, or do customers need microseconds?
-
-4. **Content Hash Algorithm**: Is SHA256 appropriate, or should we offer alternatives?
-
-5. **Minimum Viable Export**: Should there be a "minimal" export mode that only includes the score and interpretation?
+1. ~~**Character Redaction**~~ → ✅ Added `.redacted` preset and `redactCharacters` option
+2. ~~**Minimum Viable Export**~~ → ✅ Added `.minimal` preset (no events, no content)
+3. **Factor Weights in Export** → Include weights for transparency (backend can re-calculate)
+4. **Timestamp Precision** → Milliseconds (sufficient for human typing analysis)
+5. **Content Hash Algorithm** → SHA256 (industry standard, no need for alternatives)
