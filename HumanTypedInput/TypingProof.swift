@@ -25,7 +25,7 @@ public struct TypingProofExportOptions: Sendable {
 
     public init(
         includeRawEvents: Bool = true,
-        includeContentVerification: Bool = false,
+        includeContentVerification: Bool = true,
         redactCharacters: Bool = false
     ) {
         self.includeRawEvents = includeRawEvents
@@ -33,8 +33,8 @@ public struct TypingProofExportOptions: Sendable {
         self.redactCharacters = redactCharacters
     }
 
-    /// Standard export with raw events, no content verification
-    public static let standard = TypingProofExportOptions()
+    /// Default export: raw events with actual characters + content verification
+    public static let `default` = TypingProofExportOptions()
 
     /// Minimal export: no raw events, no content verification
     public static let minimal = TypingProofExportOptions(
@@ -45,14 +45,8 @@ public struct TypingProofExportOptions: Sendable {
     /// Redacted export: raw events with characters replaced by "*"
     public static let redacted = TypingProofExportOptions(
         includeRawEvents: true,
-        redactCharacters: true
-    )
-
-    /// Full export: raw events with actual characters + content verification
-    public static let full = TypingProofExportOptions(
-        includeRawEvents: true,
         includeContentVerification: true,
-        redactCharacters: false
+        redactCharacters: true
     )
 }
 
@@ -233,7 +227,7 @@ public extension HumanTypedTextView {
     /// Exports the current typing session as a verifiable proof
     /// - Parameter options: Configuration options for the export
     /// - Returns: A TypingProof object that can be serialized to JSON
-    func exportTypingProof(options: TypingProofExportOptions = .standard) -> TypingProof {
+    func exportTypingProof(options: TypingProofExportOptions = .default) -> TypingProof {
         let metrics = getTypingMetrics()
         let confidenceScore = HumanConfidenceScore(metrics: metrics)
 
@@ -277,7 +271,7 @@ public extension HumanTypedTextView {
     }
 
     /// Exports typing proof directly as JSON Data
-    func exportTypingProofAsJSON(options: TypingProofExportOptions = .standard) throws -> Data {
+    func exportTypingProofAsJSON(options: TypingProofExportOptions = .default) throws -> Data {
         return try exportTypingProof(options: options).toJSONData()
     }
 

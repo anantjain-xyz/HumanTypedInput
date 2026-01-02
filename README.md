@@ -60,10 +60,9 @@ let jsonString = try proof.toJSONString()
 
 | Preset | Description |
 |--------|-------------|
-| `.standard` | Metrics + confidence + raw keystroke events |
+| `.default` | Raw keystroke events + content hash (default) |
 | `.minimal` | Metrics + confidence only (smallest payload) |
-| `.redacted` | Raw events with characters replaced by `*` |
-| `.full` | Everything + content hash for verification |
+| `.redacted` | Raw events with characters replaced by `*` + content hash |
 
 ```swift
 // Minimal export for bandwidth-constrained scenarios
@@ -72,14 +71,11 @@ let minimal = textView.exportTypingProof(options: .minimal)
 // Redacted export for maximum privacy
 let redacted = textView.exportTypingProof(options: .redacted)
 
-// Full export with content verification
-let full = textView.exportTypingProof(options: .full)
-
 // Custom options
 var options = TypingProofExportOptions()
 options.includeRawEvents = true
 options.redactCharacters = true
-options.includeContentVerification = true
+options.includeContentVerification = false
 let custom = textView.exportTypingProof(options: options)
 ```
 

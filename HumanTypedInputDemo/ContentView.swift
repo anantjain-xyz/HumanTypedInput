@@ -9,7 +9,7 @@ struct ContentView: View {
     @State private var exportedJSON: String = ""
     @State private var selectedExportOption = 0
 
-    private let exportOptions = ["Standard", "Minimal", "Redacted", "Full"]
+    private let exportOptions = ["Default", "Minimal", "Redacted"]
 
     var body: some View {
         ScrollView {
@@ -137,11 +137,10 @@ struct ContentView: View {
 
         let options: TypingProofExportOptions
         switch selectedExportOption {
-        case 0: options = .standard
+        case 0: options = .default
         case 1: options = .minimal
         case 2: options = .redacted
-        case 3: options = .full
-        default: options = .standard
+        default: options = .default
         }
 
         do {
