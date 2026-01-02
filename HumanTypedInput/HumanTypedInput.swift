@@ -12,7 +12,7 @@ public struct KeystrokeEvent {
     public let timestamp: TimeInterval
     public let character: String
     public let timeSincePreviousKey: TimeInterval?
-    
+
     public init(timestamp: TimeInterval, character: String, timeSincePreviousKey: TimeInterval?) {
         self.timestamp = timestamp
         self.character = character
@@ -20,19 +20,33 @@ public struct KeystrokeEvent {
     }
 }
 
+/// Represents a detected paste event
+public struct PasteEvent {
+    public let timestamp: TimeInterval
+    public let characterCount: Int
+
+    public init(timestamp: TimeInterval, characterCount: Int) {
+        self.timestamp = timestamp
+        self.characterCount = characterCount
+    }
+}
+
 /// A text view that captures typing dynamics to verify human input
 public class HumanTypedTextView: UITextView {
     
     // MARK: - Public Properties
-    
+
     /// All keystroke events captured during this typing session
     public private(set) var keystrokeEvents: [KeystrokeEvent] = []
-    
+
+    /// All paste events detected during this typing session
+    public private(set) var pasteEvents: [PasteEvent] = []
+
     /// The timestamp when typing began
     public private(set) var sessionStartTime: TimeInterval?
-    
+
     // MARK: - Private Properties
-    
+
     private var lastKeystrokeTime: TimeInterval?
     
     // MARK: - Initialization
@@ -104,18 +118,40 @@ public class HumanTypedTextView: UITextView {
         
         super.deleteBackward()
     }
-    
+
+    public override func paste(_ sender: Any?) {
+        let now = CACurrentMediaTime()
+
+        if sessionStartTime == nil {
+            sessionStartTime = now
+        }
+
+        // Get the pasteboard content length before paste occurs
+        let pastedText = UIPasteboard.general.string ?? ""
+        let characterCount = pastedText.count
+
+        if characterCount > 0 {
+            let event = PasteEvent(timestamp: now, characterCount: characterCount)
+            pasteEvents.append(event)
+        }
+
+        lastKeystrokeTime = now
+
+        super.paste(sender)
+    }
+
     // MARK: - Public Methods
     
     /// Resets all captured typing data for a new session
     public func resetSession() {
         keystrokeEvents.removeAll()
+        pasteEvents.removeAll()
         sessionStartTime = nil
         lastKeystrokeTime = nil
     }
     
     /// Returns a summary of typing dynamics for verification
     public func getTypingMetrics() -> TypingMetrics {
-        return TypingMetrics(events: keystrokeEvents, sessionStart: sessionStartTime)
+        return TypingMetrics(events: keystrokeEvents, pasteEvents: pasteEvents, sessionStart: sessionStartTime)
     }
 }
