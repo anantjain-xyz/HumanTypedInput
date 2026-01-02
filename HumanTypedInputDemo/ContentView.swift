@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 import HumanTypedInput
 
 struct ContentView: View {
@@ -28,7 +29,11 @@ struct ContentView: View {
                 )
                 .frame(height: 150)
                 .padding(.horizontal)
-                
+
+                // Typing rhythm chart
+                TypingRhythmChart(events: metrics?.events ?? [])
+                    .padding(.horizontal)
+
                 if let score = confidenceScore {
                     // Big score display
                     VStack(spacing: 8) {
@@ -228,5 +233,111 @@ struct ExportSheetView: View {
 
     private func copyToClipboard() {
         UIPasteboard.general.string = json
+    }
+}
+
+// MARK: - Typing Rhythm Chart
+
+struct ChartDataPoint: Identifiable {
+    let id = UUID()
+    let index: Int
+    let intervalMs: Double
+    let isDelete: Bool
+    let isBurst: Bool
+}
+
+struct TypingRhythmChart: View {
+    let events: [KeystrokeEvent]
+
+    private let burstThresholdMs: Double = 20
+
+    private var chartData: [ChartDataPoint] {
+        events.enumerated().compactMap { index, event -> ChartDataPoint? in
+            guard let interval = event.timeSincePreviousKey else { return nil }
+            let intervalMs = interval * 1000
+            return ChartDataPoint(
+                index: index,
+                intervalMs: min(intervalMs, 500), // Cap at 500ms for readability
+                isDelete: event.character == "[DELETE]",
+                isBurst: interval < 0.020
+            )
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Typing Rhythm")
+                .font(.headline)
+
+            if chartData.isEmpty {
+                Text("Start typing to see rhythm visualization")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(height: 150)
+                    .frame(maxWidth: .infinity)
+            } else {
+                Chart {
+                    // Burst threshold reference line
+                    RuleMark(y: .value("Burst Threshold", burstThresholdMs))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
+                        .foregroundStyle(.red.opacity(0.5))
+                        .annotation(position: .trailing, alignment: .leading) {
+                            Text("20ms")
+                                .font(.caption2)
+                                .foregroundColor(.red.opacity(0.7))
+                        }
+
+                    // Line connecting points
+                    ForEach(chartData) { point in
+                        LineMark(
+                            x: .value("Keystroke", point.index),
+                            y: .value("Interval", point.intervalMs)
+                        )
+                        .foregroundStyle(.blue.opacity(0.6))
+                    }
+
+                    // Points with color coding
+                    ForEach(chartData) { point in
+                        PointMark(
+                            x: .value("Keystroke", point.index),
+                            y: .value("Interval", point.intervalMs)
+                        )
+                        .foregroundStyle(pointColor(for: point))
+                        .symbol(point.isDelete ? .triangle : .circle)
+                        .symbolSize(point.isDelete ? 60 : 40)
+                    }
+                }
+                .chartYAxisLabel("Interval (ms)")
+                .chartXAxisLabel("Keystroke #")
+                .chartYScale(domain: 0...500)
+                .frame(height: 180)
+            }
+
+            // Legend
+            HStack(spacing: 16) {
+                Label("Normal", systemImage: "circle.fill")
+                    .font(.caption2)
+                    .foregroundColor(.blue)
+                Label("Burst (<20ms)", systemImage: "circle.fill")
+                    .font(.caption2)
+                    .foregroundColor(.red)
+                Label("Deletion", systemImage: "triangle.fill")
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+            }
+        }
+        .padding()
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(8)
+    }
+
+    private func pointColor(for point: ChartDataPoint) -> Color {
+        if point.isBurst {
+            return .red
+        } else if point.isDelete {
+            return .orange
+        } else {
+            return .blue
+        }
     }
 }
