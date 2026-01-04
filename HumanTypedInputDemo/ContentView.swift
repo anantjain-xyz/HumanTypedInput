@@ -8,9 +8,6 @@ struct ContentView: View {
     @State private var textView: HumanTypedTextView?
     @State private var showingExportSheet = false
     @State private var exportedJSON: String = ""
-    @State private var selectedExportOption = 0
-
-    private let exportOptions = ["Default", "Minimal", "Redacted"]
 
     var body: some View {
         ScrollView {
@@ -103,13 +100,6 @@ struct ContentView: View {
                         Text("Export Typing Proof")
                             .font(.headline)
 
-                        Picker("Export Option", selection: $selectedExportOption) {
-                            ForEach(0..<exportOptions.count, id: \.self) { index in
-                                Text(exportOptions[index]).tag(index)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-
                         Button(action: exportProof) {
                             HStack {
                                 Image(systemName: "square.and.arrow.up")
@@ -140,16 +130,8 @@ struct ContentView: View {
     private func exportProof() {
         guard let textView = textView else { return }
 
-        let options: TypingProofExportOptions
-        switch selectedExportOption {
-        case 0: options = .default
-        case 1: options = .minimal
-        case 2: options = .redacted
-        default: options = .default
-        }
-
         do {
-            exportedJSON = try textView.exportTypingProof(options: options).toJSONString()
+            exportedJSON = try textView.exportTypingProof().toJSONString()
             showingExportSheet = true
         } catch {
             exportedJSON = "Error: \(error.localizedDescription)"

@@ -8,7 +8,6 @@ An iOS Swift framework that detects whether text input was genuinely typed by a 
 - Multi-factor analysis (timing variance, typing speed, corrections, burst detection)
 - Confidence score from 0-100 with human-readable interpretation
 - Export typing proof as JSON for backend verification
-- Privacy-friendly options (redact characters, minimal export)
 
 ## Installation
 
@@ -48,35 +47,11 @@ textView.resetSession()
 Export captured data as JSON to send to your backend for verification:
 
 ```swift
-// Standard export (includes raw keystroke events)
 let proof = textView.exportTypingProof()
 let jsonData = try proof.toJSONData()
 
 // Or get as string
 let jsonString = try proof.toJSONString()
-```
-
-### Export Options
-
-| Preset | Description |
-|--------|-------------|
-| `.default` | Raw keystroke events + content hash (default) |
-| `.minimal` | Metrics + confidence only (smallest payload) |
-| `.redacted` | Raw events with characters replaced by `*` + content hash |
-
-```swift
-// Minimal export for bandwidth-constrained scenarios
-let minimal = textView.exportTypingProof(options: .minimal)
-
-// Redacted export for maximum privacy
-let redacted = textView.exportTypingProof(options: .redacted)
-
-// Custom options
-var options = TypingProofExportOptions()
-options.includeRawEvents = true
-options.redactCharacters = true
-options.includeContentVerification = false
-let custom = textView.exportTypingProof(options: options)
 ```
 
 ### JSON Structure
@@ -110,23 +85,9 @@ let custom = textView.exportTypingProof(options: options)
       {"name": "Correction Rate", "score": 85, "weight": 0.20, "explanation": "..."},
       {"name": "Burst Detection", "score": 100, "weight": 0.25, "explanation": "..."}
     ]
-  },
-  "events": [
-    {"index": 0, "timestampMs": 0, "character": "H", "intervalMs": null},
-    {"index": 1, "timestampMs": 187, "character": "e", "intervalMs": 187},
-    {"index": 2, "timestampMs": 342, "character": "l", "intervalMs": 155}
-  ],
-  "content": {
-    "length": 142,
-    "sha256": "a1b2c3d4..."
   }
 }
 ```
-
-Notes:
-- `events` is `null` when using `.minimal`
-- `events[].character` is `"*"` when using `.redacted` (except `"[DELETE]"`)
-- `content` is `null` unless using `.full` or `includeContentVerification: true`
 
 ## Score Interpretation
 

@@ -7,48 +7,6 @@
 
 import Foundation
 import UIKit
-import CryptoKit
-
-// MARK: - Export Options
-
-/// Configuration options for typing proof export
-public struct TypingProofExportOptions: Sendable {
-    /// Include raw keystroke events in the export
-    public var includeRawEvents: Bool
-
-    /// Include content verification (length + SHA256 hash)
-    public var includeContentVerification: Bool
-
-    /// Redact characters in keystroke events (replace with "*")
-    /// Preserves timing data while hiding actual content
-    public var redactCharacters: Bool
-
-    public init(
-        includeRawEvents: Bool = true,
-        includeContentVerification: Bool = true,
-        redactCharacters: Bool = false
-    ) {
-        self.includeRawEvents = includeRawEvents
-        self.includeContentVerification = includeContentVerification
-        self.redactCharacters = redactCharacters
-    }
-
-    /// Default export: raw events with actual characters + content verification
-    public static let `default` = TypingProofExportOptions()
-
-    /// Minimal export: no raw events, no content verification
-    public static let minimal = TypingProofExportOptions(
-        includeRawEvents: false,
-        includeContentVerification: false
-    )
-
-    /// Redacted export: raw events with characters replaced by "*"
-    public static let redacted = TypingProofExportOptions(
-        includeRawEvents: true,
-        includeContentVerification: true,
-        redactCharacters: true
-    )
-}
 
 // MARK: - Typing Proof
 
@@ -65,12 +23,6 @@ public struct TypingProof: Codable, Sendable {
 
     /// Human confidence score with factor breakdown
     public let confidence: ExportedConfidence
-
-    /// Raw keystroke events (optional, controlled by export options)
-    public let events: [ExportedKeystrokeEvent]?
-
-    /// Content verification (optional)
-    public let content: ContentVerification?
 }
 
 // MARK: - Proof Metadata
@@ -148,34 +100,6 @@ public struct ExportedScoringFactor: Codable, Sendable {
     public let explanation: String
 }
 
-// MARK: - Exported Keystroke Event
-
-/// A single keystroke event for export
-public struct ExportedKeystrokeEvent: Codable, Sendable {
-    /// Sequential index of the keystroke
-    public let index: Int
-
-    /// Milliseconds since session start (normalized)
-    public let timestampMs: Int
-
-    /// Character typed (or "[DELETE]" for backspace, "*" if redacted)
-    public let character: String
-
-    /// Milliseconds since previous keystroke (null for first)
-    public let intervalMs: Int?
-}
-
-// MARK: - Content Verification
-
-/// Content verification data (length + hash)
-public struct ContentVerification: Codable, Sendable {
-    /// Length of the final text content
-    public let length: Int
-
-    /// SHA256 hash of the final text content
-    public let sha256: String
-}
-
 // MARK: - JSON Export Extensions
 
 public extension TypingProof {
@@ -225,9 +149,8 @@ public extension HumanTypedTextView {
     static let sdkVersion = "1.0.0"
 
     /// Exports the current typing session as a verifiable proof
-    /// - Parameter options: Configuration options for the export
     /// - Returns: A TypingProof object that can be serialized to JSON
-    func exportTypingProof(options: TypingProofExportOptions = .default) -> TypingProof {
+    func exportTypingProof() -> TypingProof {
         let metrics = getTypingMetrics()
         let confidenceScore = HumanConfidenceScore(metrics: metrics)
 
@@ -240,39 +163,17 @@ public extension HumanTypedTextView {
         // Build exported confidence
         let exportedConfidence = buildExportedConfidence(score: confidenceScore)
 
-        // Build events if requested
-        let events: [ExportedKeystrokeEvent]?
-        if options.includeRawEvents {
-            events = buildExportedEvents(
-                events: keystrokeEvents,
-                sessionStart: sessionStartTime,
-                redact: options.redactCharacters
-            )
-        } else {
-            events = nil
-        }
-
-        // Build content verification if requested
-        let content: ContentVerification?
-        if options.includeContentVerification {
-            content = buildContentVerification(text: self.text ?? "")
-        } else {
-            content = nil
-        }
-
         return TypingProof(
             version: "1.0",
             metadata: metadata,
             metrics: exportedMetrics,
-            confidence: exportedConfidence,
-            events: events,
-            content: content
+            confidence: exportedConfidence
         )
     }
 
     /// Exports typing proof directly as JSON Data
-    func exportTypingProofAsJSON(options: TypingProofExportOptions = .default) throws -> Data {
-        return try exportTypingProof(options: options).toJSONData()
+    func exportTypingProofAsJSON() throws -> Data {
+        return try exportTypingProof().toJSONData()
     }
 
     // MARK: - Private Helpers
@@ -360,46 +261,6 @@ public extension HumanTypedTextView {
             score: score.score,
             interpretation: score.interpretation,
             factors: exportedFactors
-        )
-    }
-
-    private func buildExportedEvents(
-        events: [KeystrokeEvent],
-        sessionStart: TimeInterval?,
-        redact: Bool
-    ) -> [ExportedKeystrokeEvent] {
-        guard let start = sessionStart else {
-            return []
-        }
-
-        return events.enumerated().map { index, event in
-            let timestampMs = Int((event.timestamp - start) * 1000)
-            let intervalMs = event.timeSincePreviousKey.map { Int($0 * 1000) }
-
-            let character: String
-            if redact && event.character != "[DELETE]" {
-                character = "*"
-            } else {
-                character = event.character
-            }
-
-            return ExportedKeystrokeEvent(
-                index: index,
-                timestampMs: timestampMs,
-                character: character,
-                intervalMs: intervalMs
-            )
-        }
-    }
-
-    private func buildContentVerification(text: String) -> ContentVerification {
-        let data = Data(text.utf8)
-        let hash = SHA256.hash(data: data)
-        let hashString = hash.compactMap { String(format: "%02x", $0) }.joined()
-
-        return ContentVerification(
-            length: text.count,
-            sha256: hashString
         )
     }
 }
