@@ -2,12 +2,15 @@ import SwiftUI
 import Charts
 import HumanTypedInput
 
+extension String: @retroactive Identifiable {
+    public var id: String { self }
+}
+
 struct ContentView: View {
     @State private var metrics: TypingMetrics?
     @State private var confidenceScore: HumanConfidenceScore?
     @State private var textView: HumanTypedTextView?
-    @State private var showingExportSheet = false
-    @State private var exportedJSON: String = ""
+    @State private var exportedJSON: String?
 
     var body: some View {
         ScrollView {
@@ -122,8 +125,8 @@ struct ContentView: View {
             }
             .padding(.top)
         }
-        .sheet(isPresented: $showingExportSheet) {
-            ExportSheetView(json: exportedJSON)
+        .sheet(item: $exportedJSON) { json in
+            ExportSheetView(json: json)
         }
     }
 
@@ -132,10 +135,8 @@ struct ContentView: View {
 
         do {
             exportedJSON = try textView.exportTypingProof().toJSONString()
-            showingExportSheet = true
         } catch {
             exportedJSON = "Error: \(error.localizedDescription)"
-            showingExportSheet = true
         }
     }
     
