@@ -2,6 +2,14 @@
 
 An iOS Swift framework that detects whether text input was genuinely typed by a human or was pasted/automated. It captures keystroke timing metadata and analyzes typing dynamics to produce a confidence score.
 
+## Who It's For
+
+Product teams that need a lightweight, client-side signal for distinguishing human typing from paste/automation, such as account creation, feedback forms, or high-trust workflows.
+
+## When Not to Use It
+
+This should not be the only gate for security-sensitive decisions. Treat it as one signal among many (risk scoring, device signals, rate limits, etc.).
+
 ## Features
 
 - Real-time keystroke capture with sub-millisecond precision
@@ -11,7 +19,21 @@ An iOS Swift framework that detects whether text input was genuinely typed by a 
 
 ## Installation
 
-Add the `HumanTypedInput` framework to your Xcode project.
+This is an Xcode project (no package manager).
+
+1. Open `HumanTypedInput.xcodeproj`.
+2. Add the `HumanTypedInput` framework to your app target in "Frameworks, Libraries, and Embedded Content".
+3. Import `HumanTypedInput` in your app code.
+
+If you prefer, you can also build and integrate the framework output manually.
+
+## Demo App
+
+Open the project in Xcode and run the `HumanTypedInputDemo` scheme, or build via:
+
+```bash
+xcodebuild -project HumanTypedInput.xcodeproj -scheme HumanTypedInputDemo -sdk iphonesimulator
+```
 
 ## Basic Usage
 
@@ -113,6 +135,21 @@ let jsonString = try proof.toJSONString()
 - iOS 14.0+
 - Swift 5.0+
 
+## Privacy & Data Handling
+
+- The SDK does not perform network requests.
+- Metrics are stored in memory during a session.
+- Exported JSON is only created when you explicitly call `exportTypingProof()`.
+
+## Limitations
+
+- Confidence scores depend on sample size and context; fewer than ~30 keystrokes may be unreliable.
+- Input method differences (predictive text, accessibility tools, hardware keyboards) can affect timing patterns.
+
+## Support
+
+Please use GitHub Issues for bugs and feature requests. For security issues, see `SECURITY.md`.
+
 ## License
 
-MIT
+MIT. See `LICENSE`.
