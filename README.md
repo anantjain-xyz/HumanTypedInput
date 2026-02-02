@@ -2,6 +2,11 @@
 
 An iOS Swift framework that detects whether text input was genuinely typed by a human or was pasted/automated. It captures keystroke timing metadata and analyzes typing dynamics to produce a confidence score.
 
+| Human Typed | Copy-pasted slop |
+| --- | --- |
+| <video src="https://github.com/user-attachments/assets/7d98d8ab-da3a-488c-9e84-cfa88c38bfbb" width="300" autoplay loop muted></video> | <video src="https://github.com/user-attachments/assets/67cd8fb9-eae5-4ea3-b508-bd6d10fd3484" width="300" autoplay loop muted></video> |
+
+
 ## Who It's For
 
 Product teams that need a lightweight, client-side signal for distinguishing human typing from paste/automation, such as account creation, feedback forms, or high-trust workflows.
