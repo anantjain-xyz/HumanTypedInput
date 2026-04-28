@@ -69,6 +69,17 @@ public struct ExportedMetrics: Codable, Sendable {
 
     /// Estimated words per minute
     public let estimatedWPM: Int?
+
+    /// Number of explicit paste operations detected
+    public let pasteCount: Int
+
+    /// Total characters inserted via paste
+    public let pastedCharacterCount: Int
+
+    /// Ratio of inter-keystroke intervals shorter than 20ms (impossible-for-humans threshold).
+    /// Nil when fewer than 5 intervals are available. Required so verifiers can recompute
+    /// the burst-detection factor without raw keystroke events.
+    public let suspiciousBurstRatio: Double?
 }
 
 // MARK: - Exported Confidence
@@ -164,7 +175,7 @@ public extension HumanTypedTextView {
         let exportedConfidence = buildExportedConfidence(score: confidenceScore)
 
         return TypingProof(
-            version: "1.0",
+            version: "1.1",
             metadata: metadata,
             metrics: exportedMetrics,
             confidence: exportedConfidence
@@ -176,7 +187,7 @@ public extension HumanTypedTextView {
         return try exportTypingProof().toJSONData()
     }
 
-    // MARK: - Private Helpers
+    // MARK: - Helpers
 
     private func buildMetadata(metrics: TypingMetrics) -> ProofMetadata {
         let now = Date()
@@ -212,7 +223,7 @@ public extension HumanTypedTextView {
         )
     }
 
-    private func buildExportedMetrics(metrics: TypingMetrics) -> ExportedMetrics {
+    internal func buildExportedMetrics(metrics: TypingMetrics) -> ExportedMetrics {
         let averageIntervalMs: Double?
         if let avg = metrics.averageTimeBetweenKeys {
             averageIntervalMs = avg * 1000
@@ -235,18 +246,32 @@ public extension HumanTypedTextView {
             estimatedWPM = nil
         }
 
+        let intervals = metrics.events.compactMap { $0.timeSincePreviousKey }
+        let suspiciousBurstRatio: Double?
+        if intervals.count >= 5 {
+            let suspiciousCount = intervals.filter { $0 < 0.02 }.count
+            suspiciousBurstRatio = Double(suspiciousCount) / Double(intervals.count)
+        } else {
+            suspiciousBurstRatio = nil
+        }
+
         return ExportedMetrics(
             totalKeystrokes: metrics.totalKeystrokes,
             deletionCount: metrics.deletionCount,
             correctionRate: metrics.correctionRate,
             averageIntervalMs: averageIntervalMs,
             timingVarianceMs: timingVarianceMs,
-            estimatedWPM: estimatedWPM
+            estimatedWPM: estimatedWPM,
+            pasteCount: metrics.pasteCount,
+            pastedCharacterCount: metrics.pastedCharacterCount,
+            suspiciousBurstRatio: suspiciousBurstRatio
         )
     }
 
-    private func buildExportedConfidence(score: HumanConfidenceScore) -> ExportedConfidence {
-        let weights = [0.1, 0.25, 0.2, 0.2, 0.25]
+    internal func buildExportedConfidence(score: HumanConfidenceScore) -> ExportedConfidence {
+        // Canonical weights — must match HumanConfidenceScore.init.
+        // Order: Volume, TimingVariance, Speed, Corrections, Bursts, Paste.
+        let weights = [0.1, 0.2, 0.15, 0.15, 0.2, 0.2]
 
         let exportedFactors = score.factors.enumerated().map { index, factor in
             ExportedScoringFactor(
