@@ -187,7 +187,7 @@ public extension HumanTypedTextView {
         return try exportTypingProof().toJSONData()
     }
 
-    // MARK: - Private Helpers
+    // MARK: - Helpers
 
     private func buildMetadata(metrics: TypingMetrics) -> ProofMetadata {
         let now = Date()
@@ -223,7 +223,7 @@ public extension HumanTypedTextView {
         )
     }
 
-    private func buildExportedMetrics(metrics: TypingMetrics) -> ExportedMetrics {
+    internal func buildExportedMetrics(metrics: TypingMetrics) -> ExportedMetrics {
         let averageIntervalMs: Double?
         if let avg = metrics.averageTimeBetweenKeys {
             averageIntervalMs = avg * 1000
@@ -268,7 +268,7 @@ public extension HumanTypedTextView {
         )
     }
 
-    private func buildExportedConfidence(score: HumanConfidenceScore) -> ExportedConfidence {
+    internal func buildExportedConfidence(score: HumanConfidenceScore) -> ExportedConfidence {
         // Canonical weights — must match HumanConfidenceScore.init.
         // Order: Volume, TimingVariance, Speed, Corrections, Bursts, Paste.
         let weights = [0.1, 0.2, 0.15, 0.15, 0.2, 0.2]

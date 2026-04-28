@@ -169,17 +169,19 @@ final class HumanConfidenceScoreTests: XCTestCase {
 
     /// The exported proof carries the canonical 6-factor weight vector.
     /// Regression guard for the bug where TypingProof.swift exported a stale
-    /// 5-element weight array.
+    /// 5-element weight array. Drives the real `buildExportedConfidence` so
+    /// drift in that helper (not just in HumanConfidenceScore) is caught.
     func test_exportedProof_hasSixFactorsWithCanonicalWeights() {
-        // We can only build a proof from a HumanTypedTextView, so do a smoke
-        // test: directly assert against the (Swift-side) factor count.
         let m = makeMetrics(
             eventCount: 50,
             intervals: Array(repeating: 0.15, count: 49)
         )
         let score = HumanConfidenceScore(metrics: m)
-        XCTAssertEqual(score.factors.count, 6, "HumanConfidenceScore must produce exactly 6 factors")
-        XCTAssertEqual(score.factors.map(\.name), [
+        let view = HumanTypedTextView(frame: .zero, textContainer: nil)
+        let exported = view.buildExportedConfidence(score: score)
+
+        XCTAssertEqual(exported.factors.count, 6, "Exported proof must carry exactly 6 factors")
+        XCTAssertEqual(exported.factors.map(\.name), [
             "Sample Volume",
             "Timing Variance",
             "Typing Speed",
@@ -187,23 +189,44 @@ final class HumanConfidenceScoreTests: XCTestCase {
             "Burst Detection",
             "Paste Detection",
         ])
+        XCTAssertEqual(
+            exported.factors.map(\.weight),
+            [0.10, 0.20, 0.15, 0.15, 0.20, 0.20],
+            "Exported weights must match the canonical vector used by HumanConfidenceScore"
+        )
+        XCTAssertEqual(
+            exported.factors.map(\.weight).reduce(0, +),
+            1.0,
+            accuracy: 1e-9,
+            "Canonical weights must sum to 1.0"
+        )
     }
 
-    /// suspiciousBurstRatio is required for server-side parity — verify it gets
-    /// populated correctly when there are enough intervals.
+    /// suspiciousBurstRatio is required for server-side parity — verify the
+    /// exported value (not a re-derivation) so drift in the export-specific
+    /// `<20ms` threshold or `>=5` interval guard is caught.
     func test_burstRatio_populatedWhenEnoughIntervals() {
         // 10 events: 5 fast (3ms), 4 normal (150ms) → 9 intervals, 5 < 20ms.
         let intervals: [TimeInterval] = [0.003, 0.003, 0.003, 0.003, 0.003, 0.15, 0.15, 0.15, 0.15]
         let m = makeMetrics(eventCount: 10, intervals: intervals)
+        let view = HumanTypedTextView(frame: .zero, textContainer: nil)
 
-        // Drive the export path. We cheat by reaching into the static helper;
-        // since exportTypingProof lives on HumanTypedTextView, replicate its
-        // suspiciousBurstRatio logic here as a sanity check.
-        let raw = m.events.compactMap { $0.timeSincePreviousKey }
-        XCTAssertEqual(raw.count, 9)
-        let suspicious = raw.filter { $0 < 0.02 }.count
-        XCTAssertEqual(suspicious, 5)
-        let ratio = Double(suspicious) / Double(raw.count)
-        XCTAssertEqual(ratio, 5.0 / 9.0, accuracy: 1e-9)
+        let exported = view.buildExportedMetrics(metrics: m)
+        XCTAssertEqual(exported.suspiciousBurstRatio ?? -1, 5.0 / 9.0, accuracy: 1e-9)
+    }
+
+    /// Below the `>=5` interval guard, suspiciousBurstRatio must be nil so
+    /// downstream verifiers can skip the burst factor instead of acting on
+    /// a noisy ratio computed from too few samples.
+    func test_burstRatio_nilWhenTooFewIntervals() {
+        // 4 events → 3 intervals, all suspicious — but below the guard.
+        let m = makeMetrics(
+            eventCount: 4,
+            intervals: [0.003, 0.003, 0.003]
+        )
+        let view = HumanTypedTextView(frame: .zero, textContainer: nil)
+
+        let exported = view.buildExportedMetrics(metrics: m)
+        XCTAssertNil(exported.suspiciousBurstRatio)
     }
 }
